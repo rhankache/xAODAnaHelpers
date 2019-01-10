@@ -17,11 +17,35 @@ from __future__ import print_function
 import argparse
 try: import argcomplete
 except: pass
-import os
+import os, os.path
 import subprocess
 import sys
 import datetime
 import time
+import ConfigParser
+
+import ROOT
+
+#
+# Load default options configuration
+userconfigpath = os.path.expanduser("~/.xAH")
+config = ConfigParser.ConfigParser()
+
+# 
+config.add_section('drivers')
+config.set('drivers', 'BatchSharedFileSystem', 'False')
+config.set('drivers', 'BatchWait', 'False')
+
+config.add_section('slurm')
+config.set('slurm', 'Account'         , 'atlas')
+config.set('slurm', 'Partition'       , 'shared-chos')
+config.set('slurm', 'RunTime'         , '24:00:00')
+config.set('slurm', 'Memory'          , None)
+config.set('slurm', 'Constrain'       , None)
+config.set('slurm', 'ExtraConfigLines', '')
+config.set('slurm', 'WrapperExec'     , '')
+
+config.read(userconfigpath)
 
 # if we want multiple custom formatters, use inheriting
 class CustomFormatter(argparse.ArgumentDefaultsHelpFormatter):
@@ -105,8 +129,8 @@ drivers_common.add_argument('--optFilesPerWorker', metavar='', type=float, requi
 drivers_common.add_argument('--optDisableMetrics', metavar='', type=int, required=False, default=None, help='the option to turn off collection of performance data')
 drivers_common.add_argument('--optPrintPerFileStats', metavar='', type=int, required=False, default=None, help='the option to turn on printing of i/o statistics at the end of each file. warning: this is not supported for all drivers.')
 drivers_common.add_argument('--optRemoveSubmitDir', metavar='', type=int, required=False, default=None, help='the name of the option for overwriting the submission directory.  if you set this to a non-zero value it will remove any existing submit-directory before tryingto create a new one. You can also use -f/--force as well in xAH_run.py.')
-drivers_common.add_argument('--optBatchSharedFileSystem', type=bool, required=False, default=False, help='enable to signify whether your batch driver is running on a shared filesystem')
-drivers_common.add_argument('--optBatchWait', action='store_true', required=False, help='submit using the submit() command. This causes the code to wait until all jobs are finished and then merge all of the outputs automatically')
+drivers_common.add_argument('--optBatchSharedFileSystem', type=bool, required=False, default=config.getboolean('drivers','BatchSharedFileSystem'), help='enable to signify whether your batch driver is running on a shared filesystem')
+drivers_common.add_argument('--optBatchWait', action='store_true', required=config.getboolean('drivers', 'BatchWait'), help='submit using the submit() command. This causes the code to wait until all jobs are finished and then merge all of the outputs automatically')
 drivers_common.add_argument('--optBatchShellInit', metavar='', type=str, required=False, default='', help='extra code to execute on each batch node before starting EventLoop')
 
 # These are handled by xAH_run.py at the top level instead of down by drivers
@@ -204,13 +228,13 @@ condor.add_argument('--optCondorConf', metavar='', type=str, required=False, def
 lsf.add_argument('--optResetShell', metavar='', type=bool, required=False, default=False, help='the option to reset the shell on the worker nodes')
 
 # define arguments for slurm driver
-slurm.add_argument('--optSlurmAccount'         , metavar='', type=str, required=False, default='atlas'      , help='the name of the account to use')
-slurm.add_argument('--optSlurmPartition'       , metavar='', type=str, required=False, default='shared-chos', help='the name of the partition to use')
-slurm.add_argument('--optSlurmRunTime'         , metavar='', type=str, required=False, default='24:00:00'   , help='the maximum runtime')
-slurm.add_argument('--optSlurmMemory'          , metavar='', type=str, required=False, default='1800'       , help='the maximum memory usage of the job (MB)')
-slurm.add_argument('--optSlurmConstrain'       , metavar='', type=str, required=False, default=''           , help='the extra constrains on the nodes')
-slurm.add_argument('--optSlurmExtraConfigLines', metavar='', type=str, required=False, default=''           , help='the extra config lines to pass to SLURM')
-slurm.add_argument('--optSlurmWrapperExec'     , metavar='', type=str, required=False, default=''           , help='the wrapper around the run script')
+slurm.add_argument('--optSlurmAccount'         , metavar='', type=str, required=False, default=config.get('slurm','Account')         , help='the name of the account to use')
+slurm.add_argument('--optSlurmPartition'       , metavar='', type=str, required=False, default=config.get('slurm','Partition')       , help='the name of the partition to use')
+slurm.add_argument('--optSlurmRunTime'         , metavar='', type=str, required=False, default=config.get('slurm','RunTime')         , help='the maximum runtime')
+slurm.add_argument('--optSlurmMemory'          , metavar='', type=str, required=False, default=config.get('slurm','Memory')          , help='the maximum memory usage of the job (MB)')
+slurm.add_argument('--optSlurmConstrain'       , metavar='', type=str, required=False, default=config.get('slurm','Constrain')       , help='the extra constrains on the nodes')
+slurm.add_argument('--optSlurmExtraConfigLines', metavar='', type=str, required=False, default=config.get('slurm','ExtraConfigLines'), help='the extra config lines to pass to SLURM')
+slurm.add_argument('--optSlurmWrapperExec'     , metavar='', type=str, required=False, default=config.get('slurm','WrapperExec')     , help='the wrapper around the run script')
 
 # start the script
 if __name__ == "__main__":
@@ -291,8 +315,6 @@ if __name__ == "__main__":
       xAH_logger.warning("--singleTask requires both --inputList and --inputRucio to have an effect")
 
 
-    # at this point, we should import ROOT and do stuff
-    import ROOT
     ## Determine which ASG framework using env var for CMAKE setup
     ASG_framework_list = ['Base', 'Top']
     ASG_framework_type = xAODAnaHelpers.utils.findFrameworkTypeFromList(ASG_framework_list)
@@ -648,8 +670,8 @@ if __name__ == "__main__":
       driver.SetAccount         (args.optSlurmAccount             )
       driver.SetPartition       (args.optSlurmPartition           )
       driver.SetRunTime         (args.optSlurmRunTime             )
-      driver.SetMemory          (args.optSlurmMemory              )
-      driver.SetConstrain       (args.optSlurmConstrain           )
+      if args.optSlurmMemory:    driver.SetMemory          (args.optSlurmMemory              )
+      if args.optSlurmConstrain: driver.SetConstrain       (args.optSlurmConstrain           )
       for opt, t in map(lambda x: (x.dest, x.type), slurm._actions):
         if getattr(args, opt) is None: continue  # skip if not set
         if opt in ['help', 'optBatchWait', 'optBatchShellInit', 'optSlurmAccount', 'optSlurmPartition', 'optSlurmRunTime', 'optSlurmMemory', 'optSlurmConstrain']: continue  # skip some options
