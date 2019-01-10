@@ -24,8 +24,6 @@ import datetime
 import time
 import ConfigParser
 
-import ROOT
-
 #
 # Load default options configuration
 userconfigpath = os.path.expanduser("~/.xAH")
@@ -315,6 +313,8 @@ if __name__ == "__main__":
       xAH_logger.warning("--singleTask requires both --inputList and --inputRucio to have an effect")
 
 
+    # at this point, we should import ROOT and do stuff
+    import ROOT
     ## Determine which ASG framework using env var for CMAKE setup
     ASG_framework_list = ['Base', 'Top']
     ASG_framework_type = xAODAnaHelpers.utils.findFrameworkTypeFromList(ASG_framework_list)
